@@ -1,0 +1,75 @@
+---
+title: "AMINGA Painel de pontuação"
+author: "Equipe de Computação e Desenvolvimento Web"
+date: "`r Sys.Date()`"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+params:
+  Sport: Andebol
+  YearCode: 1
+  Gender: Feminino
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(dbplyr)
+library(crosstalk)
+library(flexdashboard)
+library(DT)
+library(htmlwidgets)
+library(glue)
+library(DBI)
+library(lubridate)
+
+# connections
+con <- dbConnect(RSQLite::SQLite(), "../aminga_data.sqlite")
+
+# data
+df <- tbl(con, "scoringDailyPT") %>% 
+  dplyr::collect() %>% 
+  filter(Sport == params$Sport, YearCode == params$YearCode, Gender == params$Gender) %>% 
+  mutate(
+    position1 = ifelse(is.na(position1), 0, position1),
+    position2 = ifelse(is.na(position2), 0, position2)
+    ) %>% 
+  mutate(score = position1 + position2) %>% 
+  dplyr::select(Name, Sport, YearCode, Gender, ScoringDate, score) %>%
+  mutate(ScoringDate = ymd(ScoringDate)) %>% dplyr::rename(Nome = Name, Esporte = Sport, Ano = YearCode, Gênero=Gender, Data=ScoringDate, Pontuação = score)
+
+# close connection
+dbDisconnect(con) 
+
+# shared data
+df_shared <- SharedData$new(df)
+```
+
+
+```{r, results='asis'}
+cat('\n#', glue("Ano {params$YearCode} {params$Sport} {params$Gender}"), "\n")
+```
+
+
+Inputs {.sidebar}
+-------------------------------------------------------------------------
+
+```{r}
+filter_select("student_name", "escolha seu nome", df_shared, ~Nome)
+```
+
+Column
+-------------------------------------
+
+### Dados
+
+```{r}
+  datatable(
+    df_shared,
+    extensions = c('Buttons', 'Responsive'),
+            options = list(language = list(url = 'https://cdn.datatables.net/plug-ins/1.12.1/i18n/pt-PT.json'), dom = 'Blfrtip',
+                           buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+                           lengthMenu = list(c(10,25,50,-1),
+                                             c(10,25,50,"All"))))
+```

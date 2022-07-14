@@ -1,0 +1,113 @@
+---
+title: "AMINGA 2022 Sports Teams"
+author: "Equipe de Computação e Desenvolvimento Web"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Pontuação total (totalScore)
+
+```{r setup, include=FALSE, echo=FALSE, warning = FALSE, message=FALSE}
+options(dplyr.summarise.inform = FALSE)
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(dbplyr)
+
+library(DT)
+
+library(glue)
+library(DBI)
+
+library(ggplot2)
+library(plotly)
+library(scales)
+
+library(lubridate)
+library(readr)
+
+# connections
+con <- dbConnect(RSQLite::SQLite(), "../aminga_data.sqlite")
+
+# data
+df <- tbl(con, "scoringDailyPT") %>% 
+  dplyr::collect() %>% 
+  mutate(
+    position1 = ifelse(is.na(position1), 0, position1),
+    position2 = ifelse(is.na(position2), 0, position2)
+    ) %>% 
+  mutate(score = position1 + position2) %>% 
+  dplyr::select(pk_scoring, Name, Sport, YearCode, Gender, ScoringDate, score) %>% 
+  group_by(Name) %>% 
+  arrange(desc(ScoringDate), .by_group = TRUE) %>% 
+  mutate(
+    lastScore = lead(score, 1),
+    improveScore = ifelse((score >= lastScore) & (score > 0), 1, 0)
+  ) %>% 
+  mutate(
+    improveScore = ifelse(is.na(lastScore), NA, improveScore)
+  ) %>% 
+  ungroup %>% 
+  mutate(
+    ScoringDate = ymd(ScoringDate),
+    YearCode = factor(YearCode)
+  )
+
+# close connection
+dbDisconnect(con) 
+```
+
+```{r, echo=FALSE}
+plot_df <- df %>% 
+  group_by(Sport, YearCode, Gender, ScoringDate) %>% 
+  summarise(
+    totalScore = sum(score, na.rm = TRUE),
+    totalImproveScore = sum(improveScore, na.rm = TRUE)
+  ) %>% 
+  ungroup() 
+
+
+
+plot <- ggplot(plot_df, aes(x = ScoringDate, y = totalScore, color = YearCode)) + 
+  geom_line() + 
+  geom_point() +
+  facet_grid(Gender ~ Sport) + 
+  scale_y_continuous("Pontuação total (totalScore)\n") + 
+  scale_x_date("\nEncontro (ScoringDate)") + 
+  scale_color_discrete(name="Ano (YearCode)") + 
+  ggtitle("Pontuações totais para equipes esportivas")
+
+ggplotly(plot)
+
+```
+
+
+# Melhoria
+
+```{r,  echo=FALSE}
+
+plot_improve <- ggplot(plot_df, aes(x = ScoringDate, y = totalImproveScore, color = YearCode)) + 
+  geom_line() + 
+  geom_point() + 
+  facet_grid(Gender ~ Sport) + 
+  scale_y_continuous("Melhorar a pontuação total (totalImproveScore)\n") + 
+  scale_x_date("\nEncontro (ScoringDate)") + 
+  scale_color_discrete(name="Ano (YearCode)") + 
+  ggtitle("Total Melhorar Pontuação por equipe esportiva")
+
+ggplotly(plot_improve)
+```
+
+
+
+## Dados 
+
+```{r , echo=FALSE}
+  datatable(
+    plot_df,
+    extensions = c('Buttons', 'Responsive'),
+            options = list(language = list(url = 'https://cdn.datatables.net/plug-ins/1.12.1/i18n/pt-PT.json'), dom = 'Blfrtip',
+                           buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+                           lengthMenu = list(c(10,25,50,-1),
+                                             c(10,25,50,"All"))))
+```

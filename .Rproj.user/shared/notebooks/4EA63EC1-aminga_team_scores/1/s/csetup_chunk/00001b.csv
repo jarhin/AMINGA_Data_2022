@@ -1,0 +1,45 @@
+"0","# data
+df <- tbl(con, ""scoringDailyPT"") %>% 
+  dplyr::collect() %>% 
+  mutate(
+    position1 = ifelse(is.na(position1), 0, position1),
+    position2 = ifelse(is.na(position2), 0, position2)
+    ) %>% 
+  mutate(score = position1 + position2) %>% 
+  dplyr::select(pk_scoring, Name, Sport, YearCode, Gender, ScoringDate, score) %>% 
+  group_by(Name) %>% 
+  arrange(desc(ScoringDate), .by_group = TRUE) %>% 
+  mutate(
+    lastScore = lag(score, 1),
+    improveScore = case_when(
+      is.na(lastScore) ~ NA_integer_,
+      (score >= lastScore) & (score > 0) ~ 1,
+      TRUE ~ 0
+    )
+      
+      # ifelse(is.na(lastScore), NA, ifelse(score >= lastScore) & (score > 0), 1, 0)
+  ) %>% 
+  ungroup %>% 
+  mutate(
+    ScoringDate = ymd(ScoringDate),
+    YearCode = factor(YearCode)
+  )
+"
+"1","[1m[33mError[39m in [38;5;246m`mutate()`[39m:[22m
+[38;5;246m[33m![38;5;246m Problem while computing `improveScore = case_when(...)`.
+[36mℹ[38;5;246m The error occurred in group 1: Name = ""Adriano Andrade Duarte"".[39m
+[1mCaused by error in [38;5;246m`` names(message) <- `*vtmp*` ``[39m:[22m
+[33m![39m 'names' attribute [1] must be the same length as the vector [0]
+Backtrace:
+[90m  1. [39m... %>% ...
+[90m  9. [39m[1mdplyr[22m::case_when(...)
+[90m 10. [39mdplyr:::replace_with(...)
+[90m 11. [39mdplyr:::check_type(val, x, name, error_call = error_call)
+[90m 12. [39m[1mrlang[22m::abort(msg, call = error_call)
+     ...
+[90m 17. [39mrlang::cnd_message(c)
+[90m 18. [39mrlang:::cnd_message_format(cnd, ...)
+[90m 19. [39mrlang cli_format(glue_escape(lines))
+[90m 20. [39mrlang:::.rlang_cli_format(x, cli::format_error)
+[90m 21. [39m[1mcli[22m::cli_format(x, .envir = emptyenv())
+"
